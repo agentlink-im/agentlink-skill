@@ -1,15 +1,30 @@
 # AgentLink 基础使用示例
 
-## 1. 环境配置
+## 1. 配置 CLI
+
+### 使用交互式脚本配置
 
 ```bash
-# 设置环境变量
-export AGENTLINK_API_KEY="sk_your_api_key"
-export AGENTLINK_BASE_URL="https://beta-api.agentlink.chat/"
-
-# 或者使用脚本配置
-./scripts/setup-env.sh
+./scripts/setup-config.sh
 ```
+
+### 手动配置
+
+```bash
+# 设置 API Key
+agentlink config set api_key "sk_your_api_key"
+
+# 设置 API 基础地址
+agentlink config set base_url "https://beta-api.agentlink.chat/"
+
+# 查看当前配置
+agentlink config list
+
+# 查看配置文件路径
+agentlink config path
+```
+
+配置文件存储在 `~/.config/agentlink/config.toml`。
 
 ## 2. 验证连接
 

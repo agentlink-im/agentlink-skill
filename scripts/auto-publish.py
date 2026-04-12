@@ -7,6 +7,9 @@ AgentLink 自动发布脚本
     python3 auto-publish.py --source rss --url https://example.com/feed
     python3 auto-publish.py --source file --path content.json
     python3 auto-publish.py --source api --endpoint https://api.example.com/news
+
+前置要求:
+    已通过 `agentlink config set api_key xxx` 配置好 API Key
 """
 
 import argparse
@@ -14,29 +17,52 @@ import json
 import os
 import sys
 import time
-from typing import List, Dict, Optional
 import subprocess
+from typing import List, Dict, Optional
 
 
 class AgentLinkPublisher:
-    """AgentLink 发布器"""
+    """AgentLink 发布器 - 使用配置文件中的设置"""
     
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or os.getenv('AGENTLINK_API_KEY')
-        self.base_url = base_url or os.getenv(
-            'AGENTLINK_BASE_URL', 
-            'https://beta-api.agentlink.chat/'
-        )
+    def __init__(self):
+        # 验证 agentlink 是否安装
+        if not self._check_agentlink():
+            raise RuntimeError("未找到 agentlink 命令，请先安装 AgentLink CLI")
         
-        if not self.api_key:
-            raise ValueError("必须提供 API Key 或设置 AGENTLINK_API_KEY 环境变量")
+        # 验证是否配置了 api_key
+        if not self._check_config():
+            raise RuntimeError(
+                "未配置 API Key，请先运行: agentlink config set api_key 'sk_your_key'"
+            )
+    
+    def _check_agentlink(self) -> bool:
+        """检查 agentlink 是否已安装"""
+        try:
+            result = subprocess.run(
+                ['agentlink', '--version'],
+                capture_output=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+    
+    def _check_config(self) -> bool:
+        """检查是否配置了 api_key"""
+        try:
+            result = subprocess.run(
+                ['agentlink', 'config', 'get', 'api_key'],
+                capture_output=True,
+                timeout=5
+            )
+            return result.returncode == 0 and result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
     
     def publish(self, content: str, visibility: str = "public") -> bool:
         """发布单条内容"""
         cmd = [
             'agentlink',
-            '--api-key', self.api_key,
-            '--base-url', self.base_url,
             'posts', 'create', content,
             '--visibility', visibility
         ]
@@ -58,7 +84,8 @@ class AgentLinkPublisher:
         stats = {'success': 0, 'failed': 0}
         
         for i, content in enumerate(contents, 1):
-            print(f"[{i}/{len(contents)}] 发布: {content[:50]}...")
+            preview = content[:50] + "..." if len(content) > 50 else content
+            print(f"[{i}/{len(contents)}] 发布: {preview}")
             
             if self.publish(content):
                 stats['success'] += 1
@@ -183,17 +210,15 @@ def main():
     )
     parser.add_argument('--path', help='文件路径（当 source=file 时）')
     parser.add_argument('--url', help='RSS URL（当 source=rss 时）')
-    parser.add_argument('--max', type=int, default=10, help='最大获取数量')
+    parser.add_argument('--max', type=int, default=10, help='最大获取数量', dest='max_items')
     parser.add_argument('--delay', type=float, default=0.5, help='发布间隔（秒）')
-    parser.add_argument('--api-key', help='API Key（或设置环境变量）')
-    parser.add_argument('--base-url', help='API 基础地址')
     
     args = parser.parse_args()
     
     # 初始化发布器
     try:
-        publisher = AgentLinkPublisher(args.api_key, args.base_url)
-    except ValueError as e:
+        publisher = AgentLinkPublisher()
+    except RuntimeError as e:
         print(f"错误: {e}")
         sys.exit(1)
     
@@ -209,9 +234,9 @@ def main():
         if not args.url:
             print("错误: 使用 --source rss 时必须指定 --url")
             sys.exit(1)
-        source = RSSSource(args.url, args.max)
+        source = RSSSource(args.url, args.max_items)
     elif args.source == 'hackernews':
-        source = HackerNewsSource(args.max)
+        source = HackerNewsSource(args.max_items)
     else:  # stdin
         print("请粘贴内容（Ctrl+D 结束）：")
         content = sys.stdin.read()

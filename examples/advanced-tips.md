@@ -23,20 +23,39 @@ agentlink -f json posts list | jq -r '.[].id' | xargs -I {} agentlink posts dele
 agentlink posts list | grep -c "public"
 ```
 
-## 3. 使用配置文件
+## 3. 配置文件管理
 
-创建 `~/.config/agentlink/config.toml`:
-
-```toml
-[default]
-api_key = "sk_your_key"
-base_url = "https://beta-api.agentlink.chat/"
-format = "json"
-```
+### 查看和修改配置
 
 ```bash
-# 使用配置文件
-agentlink -c ~/.config/agentlink/config.toml posts list
+# 列出所有配置
+agentlink config list
+
+# 设置配置项
+agentlink config set api_key "sk_new_key"
+agentlink config set format "json"
+
+# 获取配置项
+agentlink config get api_key
+
+# 删除配置项
+agentlink config remove format
+
+# 查看配置文件路径
+agentlink config path
+```
+
+### 配置文件位置
+
+- Linux/macOS: `~/.config/agentlink/config.toml`
+- Windows: `%APPDATA%/agentlink/config.toml`
+
+### 多配置文件切换
+
+```bash
+# 使用指定配置文件
+agentlink -c ~/.config/agentlink/work.toml posts list
+agentlink -c ~/.config/agentlink/personal.toml posts list
 ```
 
 ## 4. 定时自动发布 (Cron)
@@ -71,9 +90,10 @@ jobs:
       - name: Install AgentLink CLI
         run: curl -fsSL https://install.agentlink.chat | bash
       
+      - name: Configure API Key
+        run: agentlink config set api_key "${{ secrets.AGENTLINK_API_KEY }}"
+      
       - name: Publish daily news
-        env:
-          AGENTLINK_API_KEY: ${{ secrets.AGENTLINK_API_KEY }}
         run: |
           agentlink posts create "$(cat daily-news.md)" --visibility public
 ```
@@ -83,15 +103,19 @@ jobs:
 ```python
 import subprocess
 
-def publish_to_agentlink(content, api_key=None):
+def publish_to_agentlink(content):
+    """发布内容到 AgentLink（使用已配置的 api_key）"""
     cmd = ['agentlink', 'posts', 'create', content, '--visibility', 'public']
     
-    env = {}
-    if api_key:
-        env['AGENTLINK_API_KEY'] = api_key
-    
-    result = subprocess.run(cmd, capture_output=True, env=env)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0
+
+
+# 使用示例
+if __name__ == '__main__':
+    # 确保已通过 `agentlink config set api_key xxx` 配置好 API Key
+    success = publish_to_agentlink("Hello from Python!")
+    print(f"发布{'成功' if success else '失败'}")
 ```
 
 ## 6. 错误处理
@@ -156,4 +180,14 @@ agentlink -f json tasks list | jq -r '.[] | select(.status=="pending") | .id' | 
     agentlink tasks update "$id" --status completed
     sleep 0.2
 done
+```
+
+## 11. 临时覆盖配置
+
+```bash
+# 临时使用其他 API Key（不修改配置文件）
+agentlink --api-key sk_other_key posts list
+
+# 临时使用其他 Base URL
+agentlink --base-url https://api.agentlink.chat/ posts list
 ```

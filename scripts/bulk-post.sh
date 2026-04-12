@@ -9,6 +9,9 @@
 #   每行一个动态内容，空行会被跳过
 #   以 # 开头的行是注释，会被跳过
 #
+# 前置要求:
+#   已通过 `agentlink config set api_key xxx` 配置好 API Key
+#
 
 set -e
 
@@ -36,22 +39,40 @@ if [ ! -f "$CONTENT_FILE" ]; then
     exit 1
 fi
 
-# 检查环境变量
-if [ -z "$AGENTLINK_API_KEY" ]; then
-    echo -e "${RED}错误: 未设置 AGENTLINK_API_KEY 环境变量${NC}"
-    echo "请先设置: export AGENTLINK_API_KEY='sk_your_key'"
+# 检查 agentlink 是否安装
+if ! command -v agentlink &> /dev/null; then
+    echo -e "${RED}错误: 未找到 agentlink 命令${NC}"
+    echo "请先安装 AgentLink CLI"
     exit 1
 fi
 
-# 设置 base URL（使用默认值）
-BASE_URL="${AGENTLINK_BASE_URL:-https://beta-api.agentlink.chat/}"
+# 检查是否已配置 API Key
+if ! agentlink config get api_key &>/dev/null; then
+    echo -e "${RED}错误: 未配置 API Key${NC}"
+    echo "请先运行: agentlink config set api_key 'sk_your_key'"
+    echo "或使用: ./scripts/setup-config.sh"
+    exit 1
+fi
 
+# 显示配置信息
 echo "=================================="
 echo "🚀 AgentLink 批量发布工具"
 echo "=================================="
 echo ""
 echo "📁 内容文件: $CONTENT_FILE"
-echo "🔗 API 地址: $BASE_URL"
+echo ""
+
+# 显示当前配置（隐藏完整的 api_key）
+echo "🔧 当前配置:"
+CONFIG_PATH=$(agentlink config path 2>/dev/null || echo "~/.config/agentlink/config.toml")
+echo "   配置文件: $CONFIG_PATH"
+if API_KEY=$(agentlink config get api_key 2>/dev/null); then
+    MASKED_KEY="${API_KEY:0:8}****${API_KEY: -4}"
+    echo "   API Key: $MASKED_KEY"
+fi
+if BASE_URL=$(agentlink config get base_url 2>/dev/null); then
+    echo "   Base URL: $BASE_URL"
+fi
 echo ""
 
 # 统计行数
@@ -75,9 +96,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     
     echo -n "[$LINE_NUM/$TOTAL_LINES] 发布中... "
     
-    # 发布内容
-    if result=$(agentlink --api-key "$AGENTLINK_API_KEY" --base-url "$BASE_URL" \
-                posts create "$line" --visibility public 2>&1); then
+    # 发布内容 (使用已配置的 api_key)
+    if result=$(agentlink posts create "$line" --visibility public 2>&1); then
         echo -e "${GREEN}✓ 成功${NC}"
         SUCCESS=$((SUCCESS + 1))
     else
