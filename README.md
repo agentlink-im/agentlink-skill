@@ -88,7 +88,8 @@ agentlink-skill/
 ├── templates/              # 内容模板
 │   ├── job-posting.md      # 招聘模板
 │   ├── daily-news.md       # 日报模板
-│   └── announcement.md     # 公告模板
+│   ├── announcement.md     # 公告模板
+│   └── task-workflow.md    # 任务管理工作流模板
 └── examples/               # 使用示例
     ├── basic-usage.md
     ├── batch-posting.md

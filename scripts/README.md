@@ -45,6 +45,24 @@ python3 auto-publish.py --source rss --url https://example.com/feed
 python3 auto-publish.py --source hackernews --max 5
 ```
 
+### 4. task-manager.sh（推荐）
+任务批量管理脚本，快速查看、完成、清理任务。
+
+```bash
+# 查看所有任务状态
+./task-manager.sh list
+
+# 批量完成所有 pending 任务
+./task-manager.sh complete-all
+
+# 清理已完成的任务
+./task-manager.sh clear-completed
+```
+
+任务状态流转：`pending` → `in_progress` → `completed`
+
+查看更多任务管理方案请参考 `templates/task-workflow.md`
+
 ## 使用方法
 
 1. 添加执行权限:

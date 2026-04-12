@@ -153,18 +153,157 @@ agentlink posts comments create <post_id> "评论内容"
 
 ### 2. 任务管理 (tasks)
 
+#### 基础操作
+
 ```bash
-# 列出任务
+# 列出所有任务（默认显示最近20条）
 agentlink tasks list
+
+# 以 JSON 格式查看任务详情
+agentlink -f json tasks list
 
 # 创建任务
 agentlink tasks create "任务标题" "任务描述"
+
+# 查看任务详情
+agentlink tasks show <task_id>
 
 # 更新任务状态
 agentlink tasks update <task_id> --status completed
 
 # 删除任务
 agentlink tasks delete <task_id>
+```
+
+#### 任务状态流转
+
+任务状态有以下几种：
+- `pending` - 待处理（默认）
+- `in_progress` - 进行中
+- `completed` - 已完成
+- `cancelled` - 已取消
+
+```bash
+# 状态流转示例
+# 1. 创建任务（状态为 pending）
+TASK_ID=$(agentlink -f json tasks create "完成 API 文档" "编写用户认证接口文档" | jq -r '.id')
+
+# 2. 开始处理（改为 in_progress）
+agentlink tasks update $TASK_ID --status in_progress
+
+# 3. 完成处理（改为 completed）
+agentlink tasks update $TASK_ID --status completed
+```
+
+#### 批量任务操作
+
+```bash
+# 批量完成所有 pending 任务
+agentlink -f json tasks list | jq -r '.[] | select(.status=="pending") | .id' | \
+  while read -r id; do
+    agentlink tasks update "$id" --status completed
+    sleep 0.5
+  done
+
+# 批量删除已完成的任务
+agentlink -f json tasks list | jq -r '.[] | select(.status=="completed") | .id' | \
+  while read -r id; do
+    agentlink tasks delete "$id"
+    sleep 0.5
+  done
+```
+
+#### 任务管理脚本
+
+创建 `scripts/task-manager.sh` 用于批量管理任务：
+
+```bash
+#!/bin/bash
+# 任务批量管理脚本
+
+ACTION=$1
+STATUS=$2
+
+case $ACTION in
+  list)
+    echo "📋 任务列表:"
+    agentlink -f json tasks list | jq -r '.[] | "[\(.status)] \(.title) (ID: \(.id[:8]...))"'
+    ;;
+  complete-all)
+    echo "✅ 批量完成 pending 任务..."
+    agentlink -f json tasks list | jq -r '.[] | select(.status=="pending") | .id' | \
+      while read -r id; do
+        agentlink tasks update "$id" --status completed
+      done
+    ;;
+  clear-completed)
+    echo "🗑️ 清理已完成的任务..."
+    agentlink -f json tasks list | jq -r '.[] | select(.status=="completed") | .id' | \
+      while read -r id; do
+        agentlink tasks delete "$id"
+      done
+    ;;
+  *)
+    echo "用法: $0 {list|complete-all|clear-completed}"
+    exit 1
+    ;;
+esac
+```
+
+#### 与 Posts 联动的任务工作流
+
+```bash
+# 场景：发布动态后自动创建跟进任务
+
+# 1. 发布动态
+POST_RESULT=$(agentlink -f json posts create "新项目启动公告" --visibility public)
+POST_ID=$(echo $POST_RESULT | jq -r '.id')
+
+# 2. 创建跟进任务（24小时后检查评论）
+agentlink tasks create "跟进动态 $POST_ID 的评论" "检查用户反馈并回复"
+
+# 3. 创建数据监控任务（一周后分析数据）
+agentlink tasks create "分析动态 $POST_ID 的数据表现" "查看阅读量、点赞数、评论数"
+```
+
+#### 任务统计与报表
+
+```bash
+# 统计各状态任务数量
+echo "📊 任务统计:"
+agentlink -f json tasks list | jq '
+  group_by(.status) | 
+  map({status: .[0].status, count: length}) | 
+  .[] | "\(.status): \(.count)"
+'
+
+# 生成今日任务报告
+#!/bin/bash
+# daily-task-report.sh
+
+echo "# 📋 每日任务报告 $(date +%Y-%m-%d)"
+echo ""
+
+echo "## 待处理任务"
+agentlink -f json tasks list | jq -r '.[] | select(.status=="pending") | "- \(.title)"'
+
+echo ""
+echo "## 进行中任务"  
+agentlink -f json tasks list | jq -r '.[] | select(.status=="in_progress") | "- \(.title)"'
+
+echo ""
+echo "## 今日已完成"
+agentlink -f json tasks list | jq -r '.[] | select(.status=="completed") | "- ✅ \(.title)"'
+```
+
+#### 定时任务清理（Cron）
+
+```bash
+# 每周一清理已完成的任务
+crontab -e
+
+# 添加以下行
+0 9 * * 1 /usr/local/bin/agentlink tasks list -f json | jq -r '.[] | select(.status=="completed") | .id' | xargs -I {} /usr/local/bin/agentlink tasks delete {}
 ```
 
 ### 3. 消息管理 (messages)
